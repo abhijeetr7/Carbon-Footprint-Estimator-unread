@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carbon Footprint Estimator</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start; /* Align to top to prevent overflow issues */
+            min-height: 100vh;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .container {
+            max-width: 900px;
+            width: 100%;
+            background-color: #ffffff;
+            border-radius: 1rem; /* rounded-2xl */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* shadow-xl */
+            padding: 2.5rem; /* p-10 */
+            margin-top: 20px; /* Add some top margin */
+            margin-bottom: 20px; /* Add some bottom margin */
+        }
+        .input-group label {
+            font-weight: 500; /* font-medium */
+            color: #374151; /* text-gray-700 */
+            margin-bottom: 0.5rem; /* mb-2 */
+            display: block;
+        }
+        .input-group input, .input-group select {
+            width: 100%;
+            padding: 0.75rem; /* p-3 */
+            border: 1px solid #d1d5db; /* border-gray-300 */
+            border-radius: 0.5rem; /* rounded-lg */
+            font-size: 1rem; /* text-base */
+            color: #4b5563; /* text-gray-700 */
+            background-color: #f9fafb; /* bg-gray-50 */
+            transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        .input-group input:focus, .input-group select:focus {
+            outline: none;
+            border-color: #3b82f6; /* border-blue-500 */
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); /* ring-4 ring-blue-300 */
+        }
+        .btn {
+            padding: 0.75rem 1.5rem; /* px-6 py-3 */
+            border-radius: 0.75rem; /* rounded-xl */
+            font-weight: 600; /* font-semibold */
+            text-align: center;
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out, transform 0.1s ease-in-out;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .btn-primary {
+            background-color: #2563eb; /* bg-blue-600 */
+            color: #ffffff; /* text-white */
+        }
+        .btn-primary:hover {
+            background-color: #1d4ed8; /* bg-blue-700 */
+            transform: translateY(-1px);
+        }
+        .btn-secondary {
+            background-color: #6b7280; /* bg-gray-500 */
+            color: #ffffff; /* text-white */
+        }
+        .btn-secondary:hover {
+            background-color: #4b5563; /* bg-gray-600 */
+            transform: translateY(-1px);
+        }
+        .result-box {
+            background-color: #e0f2fe; /* bg-blue-50 */
+            border: 1px solid #93c5fd; /* border-blue-300 */
+            border-radius: 0.75rem; /* rounded-xl */
+            padding: 1.5rem; /* p-6 */
+            margin-top: 2rem; /* mt-8 */
+            text-align: center;
+        }
+        .result-box p {
+            font-size: 1.25rem; /* text-xl */
+            font-weight: 600; /* font-semibold */
+            color: #1e40af; /* text-blue-800 */
+        }
+        .message-box {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #4CAF50; /* Green */
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+        }
+        .message-box.show {
+            opacity: 1;
+        }
+        .error-message {
+            background-color: #fef2f2; /* bg-red-50 */
+            border: 1px solid #fca5a5; /* border-red-300 */
+            color: #b91c1c; /* text-red-700 */
+            padding: 0.75rem; /* p-3 */
+            border-radius: 0.5rem; /* rounded-lg */
+            margin-bottom: 1rem; /* mb-4 */
+        }
+        .user-id-display {
+            background-color: #f3f4f6; /* bg-gray-100 */
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem; /* text-sm */
+            color: #4b5563; /* text-gray-700 */
+            word-break: break-all; /* Ensures long IDs wrap */
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-4xl font-bold text-center text-gray-800 mb-8">🧮 Carbon Footprint Estimator</h1>
+        <p class="text-center text-gray-600 mb-8">Input your travel, food, and energy habits to get an estimated carbon impact.</p>
+
+        <!-- User ID Display -->
+        <div id="userIdDisplay" class="user-id-display">
+            Your User ID: <span id="currentUserId">Loading...</span>
+        </div>
+
+        <!-- Time Period Toggle -->
+        <div class="flex justify-center mb-8">
+            <div class="relative inline-flex items-center rounded-full bg-gray-200 p-1">
+                <button id="dailyBtn" class="btn bg-white text-blue-600 shadow-md px-4 py-2 rounded-full text-sm font-semibold transition-all duration-300">Daily</button>
+                <button id="weeklyBtn" class="btn bg-transparent text-gray-700 px-4 py-2 rounded-full text-sm font-semibold transition-all duration-300">Weekly</button>
+                <button id="monthlyBtn" class="btn bg-transparent text-gray-700 px-4 py-2 rounded-full text-sm font-semibold transition-all duration-300">Monthly</button>
+            </div>
+        </div>
+
+        <!-- Input Sections -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+            <!-- Travel Section -->
+            <div class="bg-blue-50 p-6 rounded-xl shadow-md">
+                <h2 class="text-2xl font-semibold text-blue-800 mb-4">🚗 Travel</h2>
+                <div class="input-group mb-4">
+                    <label for="carDistance">Car Distance (km)</label>
+                    <input type="number" id="carDistance" value="0" min="0">
+                </div>
+                <div class="input-group mb-4">
+                    <label for="carType">Car Type</label>
+                    <select id="carType">
+                        <option value="petrol">Petrol Car</option>
+                        <option value="diesel">Diesel Car</option>
+                        <option value="electric">Electric Car</option>
+                    </select>
+                </div>
+                <div class="input-group mb-4">
+                    <label for="planeDistance">Plane Distance (km)</label>
+                    <input type="number" id="planeDistance" value="0" min="0">
+                </div>
+                <div class="input-group">
+                    <label for="publicTransportDistance">Public Transport (km)</label>
+                    <input type="number" id="publicTransportDistance" value="0" min="0">
+                </div>
+            </div>
+
+            <!-- Food & Energy Section -->
+            <div class="bg-green-50 p-6 rounded-xl shadow-md">
+                <h2 class="text-2xl font-semibold text-green-800 mb-4">🍔 Food & 💡 Energy</h2>
+                <div class="input-group mb-4">
+                    <label for="dietType">Diet Type</label>
+                    <select id="dietType">
+                        <option value="meat-heavy">Meat-Heavy</option>
+                        <option value="average">Average</option>
+                        <option value="vegetarian">Vegetarian</option>
+                        <option value="vegan">Vegan</option>
+                    </select>
+                </div>
+                <div class="input-group mb-4">
+                    <label for="electricityConsumption">Electricity Consumption (kWh)</label>
+                    <input type="number" id="electricityConsumption" value="0" min="0">
+                </div>
+                <div class="input-group">
+                    <label for="naturalGasConsumption">Natural Gas Consumption (kWh)</label>
+                    <input type="number" id="naturalGasConsumption" value="0" min="0">
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex justify-center gap-4 mb-8">
+            <button id="calculateBtn" class="btn btn-primary">Calculate Footprint</button>
+            <button id="saveBtn" class="btn btn-secondary">Save Progress</button>
+        </div>
+
+        <!-- Result Display -->
+        <div id="resultBox" class="result-box hidden">
+            <p>Your Estimated Carbon Footprint: <span id="carbonFootprintResult">0.00</span> kg CO2e</p>
+        </div>
+
+        <!-- Saved Progress Section -->
+        <div class="mt-8 p-6 bg-gray-50 rounded-xl shadow-md">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">📊 Saved Progress</h2>
+            <div id="savedProgressList" class="space-y-4">
+                <p class="text-gray-500 text-center" id="noSavedDataMessage">No saved data yet. Save your first footprint!</p>
+                <!-- Saved items will be appended here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Message Box for notifications -->
+    <div id="messageBox" class="message-box"></div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global variables for Firebase instances
+        let app;
+        let db;
+        let auth;
+        let userId = 'loading'; // Default until authenticated
+
+        // Emission Factors (kg CO2e per unit) - Simplified for demonstration
+        const EMISSION_FACTORS = {
+            travel: {
+                'petrol': 0.19, // kg CO2e per km
+                'diesel': 0.22, // kg CO2e per km
+                'electric': 0.01, // kg CO2e per km (assuming grid mix, very low)
+                'plane': 0.15, // kg CO2e per km
+                'publicTransport': 0.05 // kg CO2e per km (average bus/train)
+            },
+            food: { // kg CO2e per day
+                'meat-heavy': 3.3,
+                'average': 2.5,
+                'vegetarian': 1.7,
+                'vegan': 1.0
+            },
+            energy: {
+                'electricity': 0.23, // kg CO2e per kWh
+                'naturalGas': 0.2 // kg CO2e per kWh
+            }
+        };
+
+        // DOM Elements
+        const dailyBtn = document.getElementById('dailyBtn');
+        const weeklyBtn = document.getElementById('weeklyBtn');
+        const monthlyBtn = document.getElementById('monthlyBtn');
+        const calculateBtn = document.getElementById('calculateBtn');
+        const saveBtn = document.getElementById('saveBtn');
+        const resultBox = document.getElementById('resultBox');
+        const carbonFootprintResult = document.getElementById('carbonFootprintResult');
+        const savedProgressList = document.getElementById('savedProgressList');
+        const noSavedDataMessage = document.getElementById('noSavedDataMessage');
+        const messageBox = document.getElementById('messageBox');
+        const currentUserIdSpan = document.getElementById('currentUserId');
+
+        let timePeriod = 'daily'; // Default time period
+
+        // Function to show messages
+        function showMessage(message, isError = false) {
+            messageBox.textContent = message;
+            messageBox.className = 'message-box show';
+            if (isError) {
+                messageBox.style.backgroundColor = '#f44336'; // Red for error
+            } else {
+                messageBox.style.backgroundColor = '#4CAF50'; // Green for success
+            }
+            setTimeout(() => {
+                messageBox.classList.remove('show');
+            }, 3000);
+        }
+
+        // Initialize Firebase and Authentication
+        window.onload = async function() {
+            try {
+                // Get Firebase config and app ID from global variables
+                const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+                if (Object.keys(firebaseConfig).length === 0) {
+                    console.error("Firebase config is missing. Please ensure __firebase_config is set.");
+                    showMessage("Firebase not configured. Save/Compare features disabled.", true);
+                    saveBtn.disabled = true; // Disable save if no config
+                    return;
+                }
+
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        currentUserIdSpan.textContent = userId;
+                        console.log("Authenticated user ID:", userId);
+                        // Once authenticated, set up real-time listener for saved data
+                        setupFirestoreListener();
+                    } else {
+                        // Sign in anonymously if no initial token or user logs out
+                        try {
+                            if (initialAuthToken) {
+                                await signInWithCustomToken(auth, initialAuthToken);
+                            } else {
+                                await signInAnonymously(auth);
+                            }
+                        } catch (error) {
+                            console.error("Error during authentication:", error);
+                            showMessage("Authentication failed. Save/Compare features disabled.", true);
+                            saveBtn.disabled = true;
+                            // Generate a random ID if auth fails to allow basic app usage without persistence
+                            userId = crypto.randomUUID();
+                            currentUserIdSpan.textContent = userId + " (Auth Failed)";
+                        }
+                    }
+                });
+
+            } catch (error) {
+                console.error("Failed to initialize Firebase:", error);
+                showMessage("Failed to initialize Firebase. Save/Compare features disabled.", true);
+                saveBtn.disabled = true;
+                // Fallback to a random ID if Firebase init fails
+                userId = crypto.randomUUID();
+                currentUserIdSpan.textContent = userId + " (Error)";
+            }
+        };
+
+        // Function to set up Firestore listener for saved data
+        function setupFirestoreListener() {
+            if (!db || !userId || userId === 'loading') {
+                console.log("Firestore or User ID not ready for listener setup.");
+                return;
+            }
+
+            // Path for private user data
+            const userFootprintsCollectionRef = collection(db, `artifacts/${typeof __app_id !== 'undefined' ? __app_id : 'default-app-id'}/users/${userId}/carbonFootprints`);
+
+            // Use onSnapshot to listen for real-time updates
+            onSnapshot(userFootprintsCollectionRef, (snapshot) => {
+                savedProgressList.innerHTML = ''; // Clear previous list
+                if (snapshot.empty) {
+                    noSavedDataMessage.classList.remove('hidden');
+                } else {
+                    noSavedDataMessage.classList.add('hidden');
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        const date = data.timestamp ? new Date(data.timestamp.toDate()).toLocaleString() : 'N/A';
+                        const listItem = document.createElement('div');
+                        listItem.className = 'bg-white p-4 rounded-lg shadow-sm flex justify-between items-center';
+                        listItem.innerHTML = `
+                            <div>
+                                <p class="font-medium text-gray-800">Footprint: <span class="text-blue-600">${data.footprint.toFixed(2)} kg CO2e</span></p>
+                                <p class="text-sm text-gray-500">Period: ${data.timePeriod.charAt(0).toUpperCase() + data.timePeriod.slice(1)} | Saved: ${date}</p>
+                            </div>
+                            <button class="text-red-500 hover:text-red-700 text-sm delete-btn" data-id="${doc.id}">Delete</button>
+                        `;
+                        savedProgressList.appendChild(listItem);
+                    });
+
+                    // Attach event listeners to delete buttons
+                    savedProgressList.querySelectorAll('.delete-btn').forEach(button => {
+                        button.addEventListener('click', async (e) => {
+                            const docId = e.target.dataset.id;
+                            try {
+                                await deleteDoc(doc(db, `artifacts/${typeof __app_id !== 'undefined' ? __app_id : 'default-app-id'}/users/${userId}/carbonFootprints`, docId));
+                                showMessage("Entry deleted successfully!");
+                            } catch (error) {
+                                console.error("Error deleting document:", error);
+                                showMessage("Error deleting entry.", true);
+                            }
+                        });
+                    });
+                }
+            }, (error) => {
+                console.error("Error listening to Firestore:", error);
+                showMessage("Error loading saved data.", true);
+            });
+        }
+
+
+        // Function to calculate carbon footprint
+        function calculateFootprint() {
+            // Get input values
+            const carDistance = parseFloat(document.getElementById('carDistance').value) || 0;
+            const carType = document.getElementById('carType').value;
+            const planeDistance = parseFloat(document.getElementById('planeDistance').value) || 0;
+            const publicTransportDistance = parseFloat(document.getElementById('publicTransportDistance').value) || 0;
+            const dietType = document.getElementById('dietType').value;
+            const electricityConsumption = parseFloat(document.getElementById('electricityConsumption').value) || 0;
+            const naturalGasConsumption = parseFloat(document.getElementById('naturalGasConsumption').value) || 0;
+
+            let totalFootprint = 0;
+
+            // Travel emissions
+            totalFootprint += carDistance * EMISSION_FACTORS.travel[carType];
+            totalFootprint += planeDistance * EMISSION_FACTORS.travel.plane;
+            totalFootprint += publicTransportDistance * EMISSION_FACTORS.travel.publicTransport;
+
+            // Food emissions
+            totalFootprint += EMISSION_FACTORS.food[dietType];
+
+            // Energy emissions
+            totalFootprint += electricityConsumption * EMISSION_FACTORS.energy.electricity;
+            totalFootprint += naturalGasConsumption * EMISSION_FACTORS.energy.naturalGas;
+
+            // Adjust for time period
+            let multiplier = 1;
+            if (timePeriod === 'weekly') {
+                multiplier = 7;
+            } else if (timePeriod === 'monthly') {
+                multiplier = 30; // Approximation for monthly
+            }
+
+            totalFootprint *= multiplier;
+
+            carbonFootprintResult.textContent = totalFootprint.toFixed(2);
+            resultBox.classList.remove('hidden');
+            return totalFootprint;
+        }
+
+        // Event Listeners for Time Period Toggle
+        dailyBtn.addEventListener('click', () => {
+            timePeriod = 'daily';
+            dailyBtn.classList.add('bg-white', 'text-blue-600', 'shadow-md');
+            weeklyBtn.classList.remove('bg-white', 'text-blue-600', 'shadow-md');
+            monthlyBtn.classList.remove('bg-white', 'text-blue-600', 'shadow-md');
+        });
+
+        weeklyBtn.addEventListener('click', () => {
+            timePeriod = 'weekly';
+            weeklyBtn.classList.add('bg-white', 'text-blue-600', 'shadow-md');
+            dailyBtn.classList.remove('bg-white', 'text-blue-600', 'shadow-md');
+            monthlyBtn.classList.remove('bg-white', 'text-blue-600', 'shadow-md');
+        });
+
+        monthlyBtn.addEventListener('click', () => {
+            timePeriod = 'monthly';
+            monthlyBtn.classList.add('bg-white', 'text-blue-600', 'shadow-md');
+            dailyBtn.classList.remove('bg-white', 'text-blue-600', 'shadow-md');
+            weeklyBtn.classList.remove('bg-white', 'text-blue-600', 'shadow-md');
+        });
+
+        // Event Listener for Calculate Button
+        calculateBtn.addEventListener('click', calculateFootprint);
+
+        // Event Listener for Save Progress Button
+        saveBtn.addEventListener('click', async () => {
+            if (!db || !userId || userId === 'loading') {
+                showMessage("Firebase not ready. Cannot save progress.", true);
+                return;
+            }
+
+            const footprint = calculateFootprint(); // Calculate current footprint
+            if (footprint === 0) {
+                showMessage("Please enter some values before saving.", true);
+                return;
+            }
+
+            try {
+                // Save data to Firestore
+                const userFootprintsCollectionRef = collection(db, `artifacts/${typeof __app_id !== 'undefined' ? __app_id : 'default-app-id'}/users/${userId}/carbonFootprints`);
+                await addDoc(userFootprintsCollectionRef, {
+                    footprint: footprint,
+                    timePeriod: timePeriod,
+                    timestamp: serverTimestamp(), // Use server timestamp for consistency
+                    // Optionally save all input values for detailed comparison
+                    carDistance: parseFloat(document.getElementById('carDistance').value) || 0,
+                    carType: document.getElementById('carType').value,
+                    planeDistance: parseFloat(document.getElementById('planeDistance').value) || 0,
+                    publicTransportDistance: parseFloat(document.getElementById('publicTransportDistance').value) || 0,
+                    dietType: document.getElementById('dietType').value,
+                    electricityConsumption: parseFloat(document.getElementById('electricityConsumption').value) || 0,
+                    naturalGasConsumption: parseFloat(document.getElementById('naturalGasConsumption').value) || 0
+                });
+                showMessage("Carbon footprint saved successfully!");
+            } catch (e) {
+                console.error("Error adding document: ", e);
+                showMessage("Error saving progress.", true);
+            }
+        });
+    </script>
+</body>
+</html>
