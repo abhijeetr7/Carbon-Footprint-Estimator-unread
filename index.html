@@ -8,6 +8,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Inter Font -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chart.js CDN for data visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -74,6 +76,20 @@
         .btn-secondary:hover {
             background-color: #4b5563; /* bg-gray-600 */
             transform: translateY(-1px);
+        }
+        .btn-edit {
+            background-color: #f59e0b; /* bg-amber-500 */
+            color: #ffffff;
+        }
+        .btn-edit:hover {
+            background-color: #d97706; /* bg-amber-600 */
+        }
+        .btn-cancel {
+            background-color: #ef4444; /* bg-red-500 */
+            color: #ffffff;
+        }
+        .btn-cancel:hover {
+            background-color: #dc2626; /* bg-red-600 */
         }
         .result-box {
             background-color: #e0f2fe; /* bg-blue-50 */
@@ -198,6 +214,7 @@
         <div class="flex justify-center gap-4 mb-8">
             <button id="calculateBtn" class="btn btn-primary">Calculate Footprint</button>
             <button id="saveBtn" class="btn btn-secondary">Save Progress</button>
+            <button id="cancelEditBtn" class="btn btn-cancel hidden">Cancel Edit</button>
         </div>
 
         <!-- Result Display -->
@@ -208,9 +225,13 @@
         <!-- Saved Progress Section -->
         <div class="mt-8 p-6 bg-gray-50 rounded-xl shadow-md">
             <h2 class="text-2xl font-semibold text-gray-800 mb-4">📊 Saved Progress</h2>
-            <div id="savedProgressList" class="space-y-4">
+            <div id="savedProgressList" class="space-y-4 mb-6">
                 <p class="text-gray-500 text-center" id="noSavedDataMessage">No saved data yet. Save your first footprint!</p>
                 <!-- Saved items will be appended here -->
+            </div>
+            <h3 class="text-xl font-semibold text-gray-800 mb-4">📈 Footprint Trend</h3>
+            <div class="relative h-64">
+                <canvas id="footprintChart"></canvas>
             </div>
         </div>
     </div>
@@ -222,13 +243,15 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, query, onSnapshot, serverTimestamp, doc, deleteDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Global variables for Firebase instances
         let app;
         let db;
         let auth;
         let userId = 'loading'; // Default until authenticated
+        let currentEditingDocId = null; // To track if an entry is being edited
+        let footprintChart; // Chart.js instance
 
         // Emission Factors (kg CO2e per unit) - Simplified for demonstration
         const EMISSION_FACTORS = {
@@ -257,12 +280,14 @@
         const monthlyBtn = document.getElementById('monthlyBtn');
         const calculateBtn = document.getElementById('calculateBtn');
         const saveBtn = document.getElementById('saveBtn');
+        const cancelEditBtn = document.getElementById('cancelEditBtn'); // New cancel button
         const resultBox = document.getElementById('resultBox');
         const carbonFootprintResult = document.getElementById('carbonFootprintResult');
         const savedProgressList = document.getElementById('savedProgressList');
         const noSavedDataMessage = document.getElementById('noSavedDataMessage');
         const messageBox = document.getElementById('messageBox');
         const currentUserIdSpan = document.getElementById('currentUserId');
+        const footprintChartCanvas = document.getElementById('footprintChart');
 
         let timePeriod = 'daily'; // Default time period
 
@@ -335,6 +360,54 @@
             }
         };
 
+        // Function to reset input fields
+        function resetForm() {
+            document.getElementById('carDistance').value = 0;
+            document.getElementById('carType').value = 'petrol';
+            document.getElementById('planeDistance').value = 0;
+            document.getElementById('publicTransportDistance').value = 0;
+            document.getElementById('dietType').value = 'meat-heavy';
+            document.getElementById('electricityConsumption').value = 0;
+            document.getElementById('naturalGasConsumption').value = 0;
+            resultBox.classList.add('hidden'); // Hide result box
+            carbonFootprintResult.textContent = '0.00'; // Reset result text
+        }
+
+        // Function to populate input fields for editing
+        function populateFormForEdit(data) {
+            document.getElementById('carDistance').value = data.carDistance;
+            document.getElementById('carType').value = data.carType;
+            document.getElementById('planeDistance').value = data.planeDistance;
+            document.getElementById('publicTransportDistance').value = data.publicTransportDistance;
+            document.getElementById('dietType').value = data.dietType;
+            document.getElementById('electricityConsumption').value = data.electricityConsumption;
+            document.getElementById('naturalGasConsumption').value = data.naturalGasConsumption;
+
+            // Set the time period toggle
+            timePeriod = data.timePeriod;
+            [dailyBtn, weeklyBtn, monthlyBtn].forEach(btn => {
+                btn.classList.remove('bg-white', 'text-blue-600', 'shadow-md');
+                btn.classList.add('bg-transparent', 'text-gray-700');
+            });
+            document.getElementById(`${timePeriod}Btn`).classList.add('bg-white', 'text-blue-600', 'shadow-md');
+            document.getElementById(`${timePeriod}Btn`).classList.remove('bg-transparent', 'text-gray-700');
+
+            // Update button text and visibility
+            saveBtn.textContent = 'Update Entry';
+            saveBtn.classList.remove('btn-secondary');
+            saveBtn.classList.add('btn-edit');
+            cancelEditBtn.classList.remove('hidden');
+        }
+
+        // Function to reset save button and hide cancel button
+        function resetSaveButton() {
+            saveBtn.textContent = 'Save Progress';
+            saveBtn.classList.remove('btn-edit');
+            saveBtn.classList.add('btn-secondary');
+            cancelEditBtn.classList.add('hidden');
+            currentEditingDocId = null; // Clear editing state
+        }
+
         // Function to set up Firestore listener for saved data
         function setupFirestoreListener() {
             if (!db || !userId || userId === 'loading') {
@@ -348,12 +421,18 @@
             // Use onSnapshot to listen for real-time updates
             onSnapshot(userFootprintsCollectionRef, (snapshot) => {
                 savedProgressList.innerHTML = ''; // Clear previous list
+                const chartLabels = [];
+                const chartData = [];
+                const allDocsData = []; // Store all document data for editing
+
                 if (snapshot.empty) {
                     noSavedDataMessage.classList.remove('hidden');
                 } else {
                     noSavedDataMessage.classList.add('hidden');
                     snapshot.forEach(doc => {
                         const data = doc.data();
+                        allDocsData.push({ id: doc.id, ...data }); // Store doc ID along with data
+
                         const date = data.timestamp ? new Date(data.timestamp.toDate()).toLocaleString() : 'N/A';
                         const listItem = document.createElement('div');
                         listItem.className = 'bg-white p-4 rounded-lg shadow-sm flex justify-between items-center';
@@ -362,9 +441,18 @@
                                 <p class="font-medium text-gray-800">Footprint: <span class="text-blue-600">${data.footprint.toFixed(2)} kg CO2e</span></p>
                                 <p class="text-sm text-gray-500">Period: ${data.timePeriod.charAt(0).toUpperCase() + data.timePeriod.slice(1)} | Saved: ${date}</p>
                             </div>
-                            <button class="text-red-500 hover:text-red-700 text-sm delete-btn" data-id="${doc.id}">Delete</button>
+                            <div class="flex space-x-2">
+                                <button class="btn btn-edit text-sm edit-btn" data-id="${doc.id}">Edit</button>
+                                <button class="text-red-500 hover:text-red-700 text-sm delete-btn" data-id="${doc.id}">Delete</button>
+                            </div>
                         `;
                         savedProgressList.appendChild(listItem);
+
+                        // Prepare data for chart
+                        if (data.timestamp) {
+                            chartLabels.push(new Date(data.timestamp.toDate()).toLocaleDateString());
+                            chartData.push(data.footprint.toFixed(2));
+                        }
                     });
 
                     // Attach event listeners to delete buttons
@@ -374,16 +462,104 @@
                             try {
                                 await deleteDoc(doc(db, `artifacts/${typeof __app_id !== 'undefined' ? __app_id : 'default-app-id'}/users/${userId}/carbonFootprints`, docId));
                                 showMessage("Entry deleted successfully!");
+                                resetForm(); // Clear form after deleting
+                                resetSaveButton(); // Reset save button state
                             } catch (error) {
                                 console.error("Error deleting document:", error);
                                 showMessage("Error deleting entry.", true);
                             }
                         });
                     });
+
+                    // Attach event listeners to edit buttons
+                    savedProgressList.querySelectorAll('.edit-btn').forEach(button => {
+                        button.addEventListener('click', (e) => {
+                            const docId = e.target.dataset.id;
+                            const selectedDoc = allDocsData.find(d => d.id === docId);
+                            if (selectedDoc) {
+                                currentEditingDocId = docId;
+                                populateFormForEdit(selectedDoc);
+                                showMessage("Editing existing entry.");
+                            }
+                        });
+                    });
                 }
+
+                // Update the chart
+                updateChart(chartLabels, chartData);
+
             }, (error) => {
                 console.error("Error listening to Firestore:", error);
                 showMessage("Error loading saved data.", true);
+            });
+        }
+
+        // Function to update the Chart.js graph
+        function updateChart(labels, data) {
+            if (footprintChart) {
+                footprintChart.destroy(); // Destroy existing chart instance
+            }
+
+            footprintChart = new Chart(footprintChartCanvas, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Carbon Footprint (kg CO2e)',
+                        data: data,
+                        borderColor: '#2563eb', // blue-600
+                        backgroundColor: 'rgba(59, 130, 246, 0.2)', // blue-500 with transparency
+                        tension: 0.1,
+                        fill: true,
+                        pointBackgroundColor: '#2563eb',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#1d4ed8',
+                        pointHoverBorderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false, // Allow canvas to resize freely
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                color: '#374151' // text-gray-700
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.dataset.label}: ${context.raw} kg CO2e`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Date',
+                                color: '#4b5563' // text-gray-700
+                            },
+                            ticks: {
+                                color: '#6b7280' // text-gray-500
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'CO2e (kg)',
+                                color: '#4b5563' // text-gray-700
+                            },
+                            beginAtZero: true,
+                            ticks: {
+                                color: '#6b7280' // text-gray-500
+                            }
+                        }
+                    }
+                }
             });
         }
 
@@ -466,27 +642,44 @@
                 return;
             }
 
+            const dataToSave = {
+                footprint: footprint,
+                timePeriod: timePeriod,
+                timestamp: serverTimestamp(), // Use server timestamp for consistency
+                carDistance: parseFloat(document.getElementById('carDistance').value) || 0,
+                carType: document.getElementById('carType').value,
+                planeDistance: parseFloat(document.getElementById('planeDistance').value) || 0,
+                publicTransportDistance: parseFloat(document.getElementById('publicTransportDistance').value) || 0,
+                dietType: document.getElementById('dietType').value,
+                electricityConsumption: parseFloat(document.getElementById('electricityConsumption').value) || 0,
+                naturalGasConsumption: parseFloat(document.getElementById('naturalGasConsumption').value) || 0
+            };
+
             try {
-                // Save data to Firestore
                 const userFootprintsCollectionRef = collection(db, `artifacts/${typeof __app_id !== 'undefined' ? __app_id : 'default-app-id'}/users/${userId}/carbonFootprints`);
-                await addDoc(userFootprintsCollectionRef, {
-                    footprint: footprint,
-                    timePeriod: timePeriod,
-                    timestamp: serverTimestamp(), // Use server timestamp for consistency
-                    // Optionally save all input values for detailed comparison
-                    carDistance: parseFloat(document.getElementById('carDistance').value) || 0,
-                    carType: document.getElementById('carType').value,
-                    planeDistance: parseFloat(document.getElementById('planeDistance').value) || 0,
-                    publicTransportDistance: parseFloat(document.getElementById('publicTransportDistance').value) || 0,
-                    dietType: document.getElementById('dietType').value,
-                    electricityConsumption: parseFloat(document.getElementById('electricityConsumption').value) || 0,
-                    naturalGasConsumption: parseFloat(document.getElementById('naturalGasConsumption').value) || 0
-                });
-                showMessage("Carbon footprint saved successfully!");
+
+                if (currentEditingDocId) {
+                    // Update existing document
+                    await setDoc(doc(userFootprintsCollectionRef, currentEditingDocId), dataToSave);
+                    showMessage("Carbon footprint updated successfully!");
+                } else {
+                    // Add new document
+                    await addDoc(userFootprintsCollectionRef, dataToSave);
+                    showMessage("Carbon footprint saved successfully!");
+                }
+                resetForm(); // Clear form after saving/updating
+                resetSaveButton(); // Reset save button state
             } catch (e) {
-                console.error("Error adding document: ", e);
-                showMessage("Error saving progress.", true);
+                console.error("Error saving/updating document: ", e);
+                showMessage("Error saving/updating progress.", true);
             }
+        });
+
+        // Event Listener for Cancel Edit Button
+        cancelEditBtn.addEventListener('click', () => {
+            resetForm();
+            resetSaveButton();
+            showMessage("Edit cancelled.");
         });
     </script>
 </body>
